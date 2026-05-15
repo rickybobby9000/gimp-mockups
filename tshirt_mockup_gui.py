@@ -244,7 +244,7 @@ class TShirtMockupApp(Gtk.Window):
         drop_zone.add_events(Gdk.EventMask.BUTTON_PRESS_MASK)
         
         drop_label = Gtk.Label()
-        drop_label.set_markup("<b>Drag & Drop Template Here</b>\n\nPNG, JPG, PSD\nor click to browse")
+        drop_label.set_markup("<b>Drag &amp; Drop Template Here</b>\n\nPNG, JPG, PSD\nor click to browse")
         drop_label.set_line_wrap(True)
         drop_zone.add(drop_label)
         vbox.pack_start(drop_zone, False, False, 0)
@@ -424,6 +424,10 @@ class TShirtMockupApp(Gtk.Window):
         self.disp_y_spin.set_digits(1)
         self.disp_y_spin.connect("value-changed", self.on_disp_y_changed)
         disp_y_box.pack_start(self.disp_y_spin, False, False, 0)
+        
+        self.disp_y_slider = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL, adjustment=Gtk.Adjustment(value=12, lower=0, upper=50, step_increment=0.5))
+        self.disp_y_slider.set_digits(1)
+        self.disp_y_slider.connect("value-changed", self.on_disp_y_slider_changed)
         vbox.pack_start(disp_y_box, False, False, 0)
         vbox.pack_start(self.disp_y_slider, False, False, 0)
         
@@ -966,7 +970,7 @@ class TShirtMockupApp(Gtk.Window):
         if not self.template_pixbuf:
             # Draw placeholder text
             cr.set_source_rgb(1.0, 1.0, 1.0)
-            cr.select_font_face("Sans", 0, 16)
+            cr.set_font_size(16)
             cr.move_to(50, 50)
             cr.show_text("Drag & drop a template image here")
             cr.move_to(50, 70)
