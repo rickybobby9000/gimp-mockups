@@ -1,1 +1,1 @@
-Nothing needs to be added to .gitignore since only a Python source file (.py) was added and there are no build artifacts, dependencies, or temporary files in the changes.
+Nothing should be ignored based on the provided file changes, as only a Python source file (`tshirt_mockup_gui.py`) was modified and no build artifacts, dependencies, or temporary files were included in the changes.

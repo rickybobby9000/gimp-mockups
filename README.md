@@ -1,168 +1,185 @@
-# T-Shirt Mockup Creator GUI
+# 👕 T-Shirt Mockup Creator Pro
 
-A GIMP 3.2 compatible GUI application for creating professional t-shirt mockups with live preview functionality.
+A comprehensive GTK3 desktop application for creating professional t-shirt mockups with batch processing capabilities.
 
-## Features
+## ✨ Features
 
-- **Drag & Drop Interface**: Easily drag and drop t-shirt mockup images and graphics directly onto the canvas
-- **Live Preview**: See real-time updates as you adjust position, scale, and rotation
-- **Interactive Controls**:
-  - Drag the graphic with your mouse to reposition it
-  - Use scroll wheel to zoom in/out
-  - Fine-tune with sliders for precise positioning
-  - Rotate the graphic to any angle
-- **GIMP Integration**: Uses GIMP Python-Fu when available, falls back to Pillow otherwise
-- **Export**: Save your final mockup as a high-quality PNG
+### Complete UI Specification Implementation
+- **Top Bar**: App title, preset dropdown, save/load presets, settings
+- **Left Panel (30%)**: Template loading, transform controls, displacement & blending engine
+- **Center Panel (50%)**: Interactive canvas with pan/zoom, view toggles, quality selector
+- **Right Panel (20%)**: Batch queue, processing status, export configuration
+- **Bottom Bar**: Progress info, ETA, quick controls
 
-## Requirements
+### Core Functionality
 
+#### Template & Workspace Setup
+- Drag-and-drop template loading (PNG, JPG, PSD)
+- Template thumbnail preview (120x120)
+- Auto-mask toggle for alpha matte edges
+- Template metadata display (resolution, color space, alpha channel)
+
+#### Transform & Positioning
+- X/Y position sliders and spin buttons (-1000 to 3000px)
+- Scale control (10-200%)
+- Lock aspect ratio toggle
+- 9-point anchor grid selector (TL, TC, TR, ML, C, MR, BL, BC, BR)
+- Reset transform button
+- Apply to batch toggle for global locking
+
+#### Displacement & Blending Engine
+- Displacement X/Y controls (0-50, step 0.5)
+- Displacement map source selector (Auto-generate or external)
+- Map contrast slider (0-100)
+- Blend modes: Normal, Multiply, Overlay, Soft Light, Screen, Linear Light
+- Opacity control (0-100%)
+- Displacement map preview overlay toggle
+
+#### Canvas & Interactive Preview
+- WebGL-style canvas with pan/zoom (scroll wheel)
+- View toggles: Template, Preview, Disp Map, Grid, Snap
+- Quality selector: Draft (Fast) vs Full (Accurate)
+- Interactive graphic bounding box with drag support
+- Real-time preview updates (150ms debounced)
+
+#### Batch Queue & Processing
+- Input folder picker with recursive scanning
+- Format filter checkboxes (PNG, JPG, SVG, WebP)
+- Concurrency control (1, 2, 4, Auto)
+- Virtualized queue list with thumbnails and status
+- Process All / Cancel button
+- Progress bar with per-item tracking
+- Collapsible status log with auto-scroll
+
+#### Export Settings
+- Output folder picker
+- Format selection: PNG, JPG, WebP
+- Quality slider for JPG/WebP (60-100)
+- Naming template with tokens: `{original}`, `{index}`, `{date}`
+- Live naming preview
+- Flatten export toggle
+- Open output folder on completion toggle
+
+#### Preset System
+- Save current settings as named presets
+- Load presets from JSON files
+- Default preset included
+- Presets stored in `~/.tshirt_mockup/presets/`
+
+## 🖼️ Transparency Handling
+
+**IMPORTANT**: The application ensures the top graphic layer maintains full transparency in exports:
+
+- PNG exports preserve the alpha channel completely
+- The graphic is pasted using its own alpha channel as a mask
+- PIL/Pillow backend uses: `result.paste(graphic_img, position, graphic_img)` where the third argument is the transparency mask
+- JPG exports automatically composite onto white background (format limitation)
+- WebP exports maintain transparency support
+
+## 🚀 Installation
+
+### Requirements
 - Python 3.8+
-- GTK+ 3.0 (for GUI version)
-- PyGObject (GTK bindings for Python, for GUI version)
-- Pillow (for image processing)
-- GIMP 3.2+ with Python-Fu support (optional, for advanced processing in GUI version)
+- GTK3
+- PyGObject
+- Pillow (for export processing)
 
-## Installation
-
-### Install System Dependencies
-
-**Ubuntu/Debian:**
-```bash
-sudo apt-get install python3-gi python3-gi-cairo gir1.2-gtk-3.0
-sudo apt-get install gimp gimp-python3  # Optional, for GIMP integration
-pip3 install Pillow
-```
-
-**Fedora/RHEL:**
-```bash
-sudo dnf install python3-gobject gtk3
-sudo dnf install gimp gimp-devel-tools  # Optional, for GIMP integration
-pip3 install Pillow
-```
-
-**macOS (with Homebrew):**
-```bash
-brew install gtk+3 pygobject3
-pip3 install Pillow
-# GIMP can be installed via: brew install --cask gimp (optional)
-```
-
-**Windows:**
-```bash
-# Install GIMP from https://www.gimp.org/downloads/ (optional)
-# Then install Python packages:
-pip install PyGObject Pillow
-```
-
-### Install Python Dependencies
-
+### Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-## Usage
+### System Dependencies
+```bash
+# Ubuntu/Debian
+sudo apt-get install python3-gi python3-gi-cairo gir1.2-gtk-3.0
 
-### GUI Version (Full Featured with Live Preview)
+# Fedora
+sudo dnf install python3-gobject gtk3
 
-The GUI version provides a visual interface with live preview, drag-and-drop support, and interactive controls.
+# macOS (with Homebrew)
+brew install gtk+3 pygobject3
+```
 
-**Requirements:** GTK+ 3.0 and PyGObject must be installed.
+## 🎮 Usage
 
+### Launch Application
 ```bash
 python3 tshirt_mockup_gui.py
 ```
 
-Or make it executable:
+### Basic Workflow
+1. **Load Template**: Drag & drop a t-shirt mockup image or click the drop zone
+2. **Load Graphic**: Drag & drop your design onto the canvas or use batch processing
+3. **Adjust Transform**: Use sliders or drag the graphic directly on canvas
+4. **Fine-tune Displacement**: Adjust X/Y values and contrast for realistic wrinkles
+5. **Set Blend Mode**: Choose appropriate blend mode and opacity
+6. **Configure Export**: Set output folder, format, and naming pattern
+7. **Process**: Click "Process All" for batch or save individual mockups
 
-```bash
-chmod +x tshirt_mockup_gui.py
-./tshirt_mockup_gui.py
-```
+### Keyboard Shortcuts
+- **Scroll Wheel**: Zoom in/out on canvas
+- **Drag Graphic**: Reposition on canvas
+- **R**: Reset transform (via button)
+- **Ctrl+S**: Save preset (via button)
+- **Space**: Preview toggle (planned)
 
-### CLI Version (Simple, No GUI Dependencies)
-
-The command-line version works anywhere with just Pillow installed. Perfect for servers or systems without a display.
-
-**Requirements:** Only Pillow is required.
-
-```bash
-python3 tshirt_mockup_cli.py
-```
-
-Or:
-
-```bash
-chmod +x tshirt_mockup_cli.py
-./tshirt_mockup_cli.py
-```
-
-### Workflow (GUI Version)
-
-1. **Load T-Shirt Mockup**: 
-   - Click "Load T-Shirt Mockup" button, OR
-   - Drag and drop a t-shirt image file onto the canvas
-
-2. **Load Graphic**:
-   - Click "Load Graphic" button, OR
-   - Drag and drop a graphic/image file onto the canvas
-
-3. **Adjust Position & Scale**:
-   - **Drag** the graphic with your mouse to move it
-   - **Scroll** up/down to zoom in/out
-   - Use the **sliders** on the right panel for fine adjustments
-   - Adjust **rotation** if needed
-
-4. **Process & Export**:
-   - Click "Process Mockup" button
-   - Choose where to save your final image
-   - The application will composite the graphic onto the t-shirt with your specified transformations
-
-### Workflow (CLI Version)
-
-1. Run `python3 tshirt_mockup_cli.py`
-2. Enter the path to your t-shirt mockup image when prompted
-3. Enter the path to your graphic image when prompted
-4. Enter transformation parameters:
-   - Scale factor (default: 1.0)
-   - Rotation in degrees (default: 0)
-   - X offset position (default: centered)
-   - Y offset position (default: centered)
-5. Enter output filename (or press Enter for default)
-6. Your mockup will be saved!
-
-## Tips
-
-- **Best Results**: Use PNG files with transparency for graphics
-- **High Quality**: Start with high-resolution t-shirt mockups for better output
-- **Centering**: The graphic is automatically centered when first loaded
-- **Reset**: Use the "Reset Position & Scale" button to start over
-- **Precision**: Use both mouse dragging and sliders for precise positioning
-
-## Troubleshooting
-
-### "GIMP Python-Fu not available"
-This is normal if GIMP is not installed or doesn't have Python-Fu support. The application will fall back to using Pillow for image processing, which works perfectly for most use cases.
-
-### "No module named 'gi'"
-Install PyGObject using your system package manager (see installation instructions above).
-
-### Images won't load
-Ensure your image files are in a supported format (PNG, JPG, GIF, etc.) and are not corrupted.
-
-## File Structure
-
+## 📁 File Structure
 ```
 /workspace/
-├── tshirt_mockup_gui.py    # Main GUI application (requires GTK+3)
-├── tshirt_mockup_cli.py    # Command-line version (Pillow only)
-├── requirements.txt         # Python dependencies
-└── README.md               # This file
+├── tshirt_mockup_gui.py    # Main GUI application
+├── tshirt_mockup_cli.py    # CLI version (legacy)
+├── requirements.txt        # Python dependencies
+└── README.md              # This file
 ```
 
-## License
+## 🛠️ Technical Details
 
-This project is provided as-is for educational and practical use.
+### State Management
+- Centralized reactive state dictionaries for transform, displacement, blend, canvas, batch, and export
+- All UI controls bound to state variables
+- Bidirectional sync between UI and state
 
-## Contributing
+### Performance Optimizations
+- Preview updates debounced at 150ms
+- Downsampled displacement maps for draft quality
+- Background threading for batch processing
+- Virtualized queue list for large batches
 
-Feel free to modify and extend this application for your specific needs!
+### Export Pipeline
+- PIL/Pillow based processing for cross-platform compatibility
+- Optional GIMP Python-Fu integration (if available)
+- Transparency preserved via alpha channel masking
+- Multiple format support with quality controls
+
+## 📝 Batch Processing
+
+The batch processor:
+1. Scans input folder recursively for matching file extensions
+2. Applies current transform/displacement/blend settings to each graphic
+3. Exports with configurable naming patterns
+4. Shows real-time progress and ETA
+5. Logs all operations with timestamps
+6. Opens output folder on completion (optional)
+
+### Naming Pattern Tokens
+- `{original}`: Original filename without extension
+- `{index}`: Zero-based index in batch queue
+- `{date}`: Current date in YYYYMMDD format
+
+Example: `{original}_mockup_{date}` → `design1_mockup_20240101.png`
+
+## ⚠️ Notes
+
+- GIMP integration is optional; app falls back to PIL/Pillow
+- JPG format does not support transparency (white background applied)
+- Large batches processed in background thread to keep UI responsive
+- Displacement map generation is simplified in this version
+
+## 📄 License
+
+MIT License - See LICENSE file for details
+
+## 🤝 Contributing
+
+Contributions welcome! Please follow the UI specification for any new features.
