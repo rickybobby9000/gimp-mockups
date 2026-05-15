@@ -1,0 +1,1 @@
+magick input.png -fuzz 15% -transparent white -morphology Erode Diamond:1 output.png
