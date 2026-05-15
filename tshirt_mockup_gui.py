@@ -782,8 +782,34 @@ class TShirtMockupApp(Gtk.Window):
         }
         
         .panel {
-            background: #f5f6fa;
+            background: #2d3436;
+            color: #dfe6e9;
             padding: 5px;
+        }
+        
+        .panel label {
+            color: #dfe6e9;
+        }
+        
+        .panel spinbutton,
+        .panel scale,
+        .panel combobox,
+        .panel checkbutton,
+        .panel radiobutton {
+            color: #dfe6e9;
+        }
+        
+        .panel spinbutton entry {
+            background: #636e72;
+            color: #dfe6e9;
+        }
+        
+        .panel scale trough {
+            background: #636e72;
+        }
+        
+        .panel scale highlight {
+            background: #0984e3;
         }
         
         .center-panel {
@@ -796,24 +822,40 @@ class TShirtMockupApp(Gtk.Window):
         }
         
         .section-frame > border {
-            border: 1px solid #b2bec3;
+            border: 1px solid #636e72;
             border-radius: 5px;
+        }
+        
+        .section-frame label {
+            color: #dfe6e9;
         }
         
         .drop-zone {
-            background: #ecf0f1;
+            background: #636e72;
             border: 2px dashed #bdc3c7;
             border-radius: 5px;
+            color: #dfe6e9;
         }
         
         .drop-zone:hover {
-            background: #dfe6e9;
+            background: #748590;
         }
         
         .queue-list {
-            background: white;
-            border: 1px solid #bdc3c7;
+            background: #636e72;
+            color: #dfe6e9;
+            border: 1px solid #b2bec3;
             border-radius: 3px;
+        }
+        
+        .queue-list row {
+            background: #636e72;
+            color: #dfe6e9;
+        }
+        
+        .queue-list row:selected {
+            background: #0984e3;
+            color: white;
         }
         
         button.suggested-action {
@@ -823,6 +865,15 @@ class TShirtMockupApp(Gtk.Window):
         
         button.suggested-action:hover {
             background: #00a884;
+        }
+        
+        expander label {
+            color: #dfe6e9;
+        }
+        
+        expander arrow {
+            -gtk-icon-source: -gtk-icontheme("pan-end-symbolic");
+            color: #dfe6e9;
         }
         """
         css_provider.load_from_data(css.encode())
