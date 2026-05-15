@@ -99,8 +99,13 @@ class TShirtMockupApp(Gtk.Window):
         
         # Preview state
         self.dragging = False
+        self.resizing = False
+        self.resize_handle = None  # Which corner handle is being dragged (tl, tr, bl, br)
         self.last_mouse_x = 0
         self.last_mouse_y = 0
+        self.resize_start_scale = 0
+        self.resize_start_x = 0
+        self.resize_start_y = 0
         self.preview_debounce_timer = None
         
         self.init_ui()
@@ -1120,15 +1125,38 @@ class TShirtMockupApp(Gtk.Window):
             cr.paint()
     
     def draw_bounding_box(self, cr):
-        """Draw selection bounding box around graphic"""
+        """Draw selection bounding box around graphic with resize handles"""
         scaled_width = int(self.graphic_pixbuf.get_width() * self.transform['scale'] / 100)
         scaled_height = int(self.graphic_pixbuf.get_height() * self.transform['scale'] / 100)
         
+        x = self.transform['x']
+        y = self.transform['y']
+        
+        # Draw bounding box
         cr.set_source_rgba(0.0, 1.0, 0.0, 0.7)
         cr.set_line_width(2)
-        cr.rectangle(self.transform['x'], self.transform['y'], 
-                    scaled_width, scaled_height)
+        cr.rectangle(x, y, scaled_width, scaled_height)
         cr.stroke()
+        
+        # Draw resize handles at corners (8px squares)
+        handle_size = 8
+        cr.set_source_rgba(0.0, 1.0, 0.0, 0.9)
+        
+        # Top-left
+        cr.rectangle(x - handle_size/2, y - handle_size/2, handle_size, handle_size)
+        cr.fill()
+        
+        # Top-right
+        cr.rectangle(x + scaled_width - handle_size/2, y - handle_size/2, handle_size, handle_size)
+        cr.fill()
+        
+        # Bottom-left
+        cr.rectangle(x - handle_size/2, y + scaled_height - handle_size/2, handle_size, handle_size)
+        cr.fill()
+        
+        # Bottom-right
+        cr.rectangle(x + scaled_width - handle_size/2, y + scaled_height - handle_size/2, handle_size, handle_size)
+        cr.fill()
     
     def on_button_press(self, widget, event):
         """Handle mouse button press on canvas"""
@@ -1140,8 +1168,58 @@ class TShirtMockupApp(Gtk.Window):
             click_x = (event.x - self.canvas['panX']) / self.canvas['zoom']
             click_y = (event.y - self.canvas['panY']) / self.canvas['zoom']
             
-            if (self.transform['x'] <= click_x <= self.transform['x'] + scaled_width and
-                self.transform['y'] <= click_y <= self.transform['y'] + scaled_height):
+            x = self.transform['x']
+            y = self.transform['y']
+            handle_size = 8
+            
+            # Check resize handles first (priority over dragging)
+            # Top-left
+            if (x - handle_size/2 <= click_x <= x + handle_size/2 and
+                y - handle_size/2 <= click_y <= y + handle_size/2):
+                self.resizing = True
+                self.resize_handle = 'tl'
+                self.resize_start_scale = self.transform['scale']
+                self.resize_start_x = x
+                self.resize_start_y = y
+                self.last_mouse_x = click_x
+                self.last_mouse_y = click_y
+                self.drawing_area.set_cursor(Gdk.Cursor.new(Gdk.CursorType.TOP_LEFT_CORNER))
+            # Top-right
+            elif (x + scaled_width - handle_size/2 <= click_x <= x + scaled_width + handle_size/2 and
+                  y - handle_size/2 <= click_y <= y + handle_size/2):
+                self.resizing = True
+                self.resize_handle = 'tr'
+                self.resize_start_scale = self.transform['scale']
+                self.resize_start_x = x
+                self.resize_start_y = y
+                self.last_mouse_x = click_x
+                self.last_mouse_y = click_y
+                self.drawing_area.set_cursor(Gdk.Cursor.new(Gdk.CursorType.TOP_RIGHT_CORNER))
+            # Bottom-left
+            elif (x - handle_size/2 <= click_x <= x + handle_size/2 and
+                  y + scaled_height - handle_size/2 <= click_y <= y + scaled_height + handle_size/2):
+                self.resizing = True
+                self.resize_handle = 'bl'
+                self.resize_start_scale = self.transform['scale']
+                self.resize_start_x = x
+                self.resize_start_y = y
+                self.last_mouse_x = click_x
+                self.last_mouse_y = click_y
+                self.drawing_area.set_cursor(Gdk.Cursor.new(Gdk.CursorType.BOTTOM_LEFT_CORNER))
+            # Bottom-right
+            elif (x + scaled_width - handle_size/2 <= click_x <= x + scaled_width + handle_size/2 and
+                  y + scaled_height - handle_size/2 <= click_y <= y + scaled_height + handle_size/2):
+                self.resizing = True
+                self.resize_handle = 'br'
+                self.resize_start_scale = self.transform['scale']
+                self.resize_start_x = x
+                self.resize_start_y = y
+                self.last_mouse_x = click_x
+                self.last_mouse_y = click_y
+                self.drawing_area.set_cursor(Gdk.Cursor.new(Gdk.CursorType.BOTTOM_RIGHT_CORNER))
+            # Check if click is within graphic bounds for dragging
+            elif (x <= click_x <= x + scaled_width and
+                  y <= click_y <= y + scaled_height):
                 self.dragging = True
                 self.last_mouse_x = click_x
                 self.last_mouse_y = click_y
@@ -1151,33 +1229,87 @@ class TShirtMockupApp(Gtk.Window):
         """Handle mouse button release"""
         if event.button == 1:
             self.dragging = False
+            self.resizing = False
+            self.resize_handle = None
             # Reset cursor to default
             self.drawing_area.set_cursor(None)
     
     def on_motion_notify(self, widget, event):
         """Handle mouse motion"""
-        if self.dragging and self.graphic_pixbuf:
+        if self.graphic_pixbuf:
             # Calculate current position accounting for zoom
             current_x = (event.x - self.canvas['panX']) / self.canvas['zoom']
             current_y = (event.y - self.canvas['panY']) / self.canvas['zoom']
             
-            dx = current_x - self.last_mouse_x
-            dy = current_y - self.last_mouse_y
-            
-            self.transform['x'] += dx
-            self.transform['y'] += dy
-            
-            # Update UI controls
-            self.pos_x_spin.set_value(self.transform['x'])
-            self.pos_x_slider.set_value(self.transform['x'])
-            self.pos_y_spin.set_value(self.transform['y'])
-            self.pos_y_slider.set_value(self.transform['y'])
-            
-            self.last_mouse_x = current_x
-            self.last_mouse_y = current_y
-            
-            # Force immediate redraw for responsive dragging
-            self.drawing_area.queue_draw()
+            if self.resizing and self.resize_handle:
+                # Handle resizing from corners
+                dx = current_x - self.last_mouse_x
+                dy = current_y - self.last_mouse_y
+                
+                orig_width = self.graphic_pixbuf.get_width()
+                orig_height = self.graphic_pixbuf.get_height()
+                orig_scaled_width = int(orig_width * self.resize_start_scale / 100)
+                orig_scaled_height = int(orig_height * self.resize_start_scale / 100)
+                
+                if self.resize_handle == 'br':  # Bottom-right
+                    # Calculate new scale based on diagonal distance
+                    new_width = orig_scaled_width + dx
+                    new_height = orig_scaled_height + dy
+                    # Use average to maintain aspect ratio somewhat
+                    avg_scale = (new_width / orig_width + new_height / orig_height) / 2 * 100
+                elif self.resize_handle == 'bl':  # Bottom-left
+                    new_width = orig_scaled_width - dx
+                    new_height = orig_scaled_height + dy
+                    avg_scale = (new_width / orig_width + new_height / orig_height) / 2 * 100
+                    # Adjust x position
+                    self.transform['x'] = self.resize_start_x + dx
+                elif self.resize_handle == 'tr':  # Top-right
+                    new_width = orig_scaled_width + dx
+                    new_height = orig_scaled_height - dy
+                    avg_scale = (new_width / orig_width + new_height / orig_height) / 2 * 100
+                    # Adjust y position
+                    self.transform['y'] = self.resize_start_y + dy
+                elif self.resize_handle == 'tl':  # Top-left
+                    new_width = orig_scaled_width - dx
+                    new_height = orig_scaled_height - dy
+                    avg_scale = (new_width / orig_width + new_height / orig_height) / 2 * 100
+                    # Adjust x and y position
+                    self.transform['x'] = self.resize_start_x + dx
+                    self.transform['y'] = self.resize_start_y + dy
+                
+                # Clamp scale to valid range
+                new_scale = max(10, min(200, avg_scale))
+                self.transform['scale'] = new_scale
+                
+                # Update UI controls
+                self.scale_spin.set_value(new_scale)
+                self.scale_slider.set_value(new_scale)
+                self.pos_x_spin.set_value(self.transform['x'])
+                self.pos_x_slider.set_value(self.transform['x'])
+                self.pos_y_spin.set_value(self.transform['y'])
+                self.pos_y_slider.set_value(self.transform['y'])
+                
+                # Force immediate redraw
+                self.drawing_area.queue_draw()
+                
+            elif self.dragging:
+                dx = current_x - self.last_mouse_x
+                dy = current_y - self.last_mouse_y
+                
+                self.transform['x'] += dx
+                self.transform['y'] += dy
+                
+                # Update UI controls
+                self.pos_x_spin.set_value(self.transform['x'])
+                self.pos_x_slider.set_value(self.transform['x'])
+                self.pos_y_spin.set_value(self.transform['y'])
+                self.pos_y_slider.set_value(self.transform['y'])
+                
+                self.last_mouse_x = current_x
+                self.last_mouse_y = current_y
+                
+                # Force immediate redraw for responsive dragging
+                self.drawing_area.queue_draw()
     
     def on_scroll(self, widget, event):
         """Handle scroll wheel for zooming"""
