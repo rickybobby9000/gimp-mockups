@@ -1055,11 +1055,11 @@ class TShirtMockupApp(Gtk.Window):
         if self.displacement['showMap'] and self.disp_map_pixbuf:
             self.draw_disp_map_overlay(cr)
         
-        cr.restore()
-        
-        # Draw bounding box around graphic
+        # Draw bounding box around graphic (in transformed coords so it matches)
         if self.graphic_pixbuf:
             self.draw_bounding_box(cr)
+        
+        cr.restore()
     
     def draw_grid(self, cr):
         """Draw grid overlay"""
@@ -1125,7 +1125,7 @@ class TShirtMockupApp(Gtk.Window):
             cr.paint()
     
     def draw_bounding_box(self, cr):
-        """Draw selection bounding box around graphic with resize handles"""
+        """Draw selection bounding box around graphic with resize handles (in current transformed space)"""
         scaled_width = int(self.graphic_pixbuf.get_width() * self.transform['scale'] / 100)
         scaled_height = int(self.graphic_pixbuf.get_height() * self.transform['scale'] / 100)
         
@@ -1134,12 +1134,12 @@ class TShirtMockupApp(Gtk.Window):
         
         # Draw bounding box
         cr.set_source_rgba(0.0, 1.0, 0.0, 0.7)
-        cr.set_line_width(2)
+        cr.set_line_width(2 / self.canvas['zoom'])  # Adjust line width for zoom
         cr.rectangle(x, y, scaled_width, scaled_height)
         cr.stroke()
         
-        # Draw resize handles at corners (8px squares)
-        handle_size = 8
+        # Draw resize handles at corners (size adjusted for zoom)
+        handle_size = 8 / self.canvas['zoom']
         cr.set_source_rgba(0.0, 1.0, 0.0, 0.9)
         
         # Top-left
@@ -1170,7 +1170,7 @@ class TShirtMockupApp(Gtk.Window):
             
             x = self.transform['x']
             y = self.transform['y']
-            handle_size = 8
+            handle_size = 8 / self.canvas['zoom']  # Adjust handle size for zoom
             
             # Check resize handles first (priority over dragging)
             # Top-left
