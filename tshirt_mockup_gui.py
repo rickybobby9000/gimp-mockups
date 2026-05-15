@@ -544,7 +544,8 @@ class TShirtMockupApp(Gtk.Window):
             Gdk.EventMask.BUTTON_PRESS_MASK |
             Gdk.EventMask.BUTTON_RELEASE_MASK |
             Gdk.EventMask.POINTER_MOTION_MASK |
-            Gdk.EventMask.SCROLL_MASK
+            Gdk.EventMask.SCROLL_MASK |
+            Gdk.EventMask.SMOOTH_SCROLL_MASK
         )
         self.drawing_area.connect("button-press-event", self.on_button_press)
         self.drawing_area.connect("button-release-event", self.on_button_release)
@@ -1135,22 +1136,33 @@ class TShirtMockupApp(Gtk.Window):
             scaled_width = int(self.graphic_pixbuf.get_width() * self.transform['scale'] / 100)
             scaled_height = int(self.graphic_pixbuf.get_height() * self.transform['scale'] / 100)
             
-            if (self.transform['x'] <= event.x <= self.transform['x'] + scaled_width and
-                self.transform['y'] <= event.y <= self.transform['y'] + scaled_height):
+            # Check if click is within graphic bounds (accounting for zoom)
+            click_x = (event.x - self.canvas['panX']) / self.canvas['zoom']
+            click_y = (event.y - self.canvas['panY']) / self.canvas['zoom']
+            
+            if (self.transform['x'] <= click_x <= self.transform['x'] + scaled_width and
+                self.transform['y'] <= click_y <= self.transform['y'] + scaled_height):
                 self.dragging = True
-                self.last_mouse_x = event.x
-                self.last_mouse_y = event.y
+                self.last_mouse_x = click_x
+                self.last_mouse_y = click_y
+                self.drawing_area.set_cursor(Gdk.Cursor.new(Gdk.CursorType.FLEUR))
     
     def on_button_release(self, widget, event):
         """Handle mouse button release"""
         if event.button == 1:
             self.dragging = False
+            # Reset cursor to default
+            self.drawing_area.set_cursor(None)
     
     def on_motion_notify(self, widget, event):
         """Handle mouse motion"""
         if self.dragging and self.graphic_pixbuf:
-            dx = event.x - self.last_mouse_x
-            dy = event.y - self.last_mouse_y
+            # Calculate current position accounting for zoom
+            current_x = (event.x - self.canvas['panX']) / self.canvas['zoom']
+            current_y = (event.y - self.canvas['panY']) / self.canvas['zoom']
+            
+            dx = current_x - self.last_mouse_x
+            dy = current_y - self.last_mouse_y
             
             self.transform['x'] += dx
             self.transform['y'] += dy
@@ -1161,19 +1173,32 @@ class TShirtMockupApp(Gtk.Window):
             self.pos_y_spin.set_value(self.transform['y'])
             self.pos_y_slider.set_value(self.transform['y'])
             
-            self.last_mouse_x = event.x
-            self.last_mouse_y = event.y
+            self.last_mouse_x = current_x
+            self.last_mouse_y = current_y
             
-            self.queue_preview_update()
+            # Force immediate redraw for responsive dragging
+            self.drawing_area.queue_draw()
     
     def on_scroll(self, widget, event):
         """Handle scroll wheel for zooming"""
-        if event.direction == Gdk.ScrollDirection.UP:
-            self.canvas['zoom'] = min(5.0, self.canvas['zoom'] + 0.1)
+        # Handle both regular and smooth scroll events
+        if event.direction == Gdk.ScrollDirection.UP or \
+           event.direction == Gdk.ScrollDirection.SMOOTH:
+            delta = 0.1
+            if event.direction == Gdk.ScrollDirection.SMOOTH:
+                # For smooth scrolling, use the scroll deltas
+                _, dx, dy = event.get_scroll_deltas()
+                if dy < 0:
+                    self.canvas['zoom'] = min(5.0, self.canvas['zoom'] + 0.1)
+                elif dy > 0:
+                    self.canvas['zoom'] = max(0.1, self.canvas['zoom'] - 0.1)
+            else:
+                self.canvas['zoom'] = min(5.0, self.canvas['zoom'] + delta)
         elif event.direction == Gdk.ScrollDirection.DOWN:
             self.canvas['zoom'] = max(0.1, self.canvas['zoom'] - 0.1)
         
-        self.queue_preview_update()
+        # Force immediate redraw
+        self.drawing_area.queue_draw()
     
     # === Transform Control Handlers ===
     
