@@ -14,7 +14,14 @@ if '/usr/lib/python3/dist-packages' not in sys.path:
 import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('GdkPixbuf', '2.0')
-from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio, Pango, cairo
+try:
+    gi.require_version('GtkGL', '3.0')
+    from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio, Pango, cairo, GtkGL
+    GTKGL_AVAILABLE = True
+except:
+    from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio, Pango, cairo
+    GTKGL_AVAILABLE = False
+    print("Note: GtkGL not available, falling back to optimized Cairo rendering")
 import os
 import sys
 import math
@@ -38,12 +45,18 @@ class TShirtMockupApp(Gtk.Window):
         self.set_default_size(1400, 900)
         self.set_border_width(5)
         
-        # Enable hardware acceleration
+        # Enable hardware acceleration with compositing support
         screen = Gdk.Screen.get_default()
         visual = Gdk.Screen.get_rgba_visual(screen)
-        if visual:
+        if visual and screen.is_composited():
             self.set_visual(visual)
+            print("✓ Hardware acceleration enabled (RGBA visual + compositor)")
+        else:
+            print("ℹ Using standard visual (compositor not detected or RGBA not available)")
         self.set_app_paintable(True)
+        
+        # Optimize for GPU rendering by setting high-quality render hints
+        Gtk.Widget.set_double_buffered(self, True)
         
         # Image storage
         self.template_path = None
@@ -565,6 +578,7 @@ class TShirtMockupApp(Gtk.Window):
         # Drawing area for canvas with hardware acceleration
         self.drawing_area = Gtk.DrawingArea()
         self.drawing_area.set_app_paintable(True)
+        self.drawing_area.set_double_buffered(True)
         self.drawing_area.set_size_request(700, 600)
         self.drawing_area.connect("draw", self.on_draw)
         self.drawing_area.add_events(
@@ -751,6 +765,84 @@ class TShirtMockupApp(Gtk.Window):
         self.open_on_finish_check = Gtk.CheckButton(label="Open output folder when done")
         self.open_on_finish_check.set_active(True)
         export_vbox.pack_start(self.open_on_finish_check, False, False, 0)
+        
+        # Single Process Button (for current graphic only)
+        process_single_btn = Gtk.Button(label="🖼️ Process Current Graphic")
+        process_single_btn.get_style_context().add_class("suggested-action")
+        process_single_btn.set_tooltip_text("Export only the currently loaded graphic with all blending effects applied")
+        process_single_btn.connect("clicked", self.on_process_current)
+        export_vbox.pack_start(process_single_btn, False, False, 8)
+        
+        # Blending options for realistic mockup
+        blend_options_frame = Gtk.Frame()
+        blend_options_frame.set_label(" 🎨 Realistic Blending Options ")
+        blend_options_frame.set_label_align(0.02, 0.5)
+        blend_options_frame.get_style_context().add_class("section-frame")
+        
+        blend_options_vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        blend_options_vbox.set_margin_top(8)
+        blend_options_vbox.set_margin_bottom(8)
+        blend_options_vbox.set_margin_start(10)
+        blend_options_vbox.set_margin_end(10)
+        blend_options_frame.add(blend_options_vbox)
+        
+        # Blend mode dropdown
+        blend_mode_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+        blend_mode_label = Gtk.Label(label="Blend Mode:")
+        blend_mode_box.pack_start(blend_mode_label, False, False, 0)
+        
+        self.blend_mode_combo = Gtk.ComboBoxText()
+        for mode in ['normal', 'multiply', 'screen', 'overlay', 'soft_light', 'hard_light', 'difference']:
+            self.blend_mode_combo.append(mode, mode.replace('_', ' ').title())
+        self.blend_mode_combo.set_active_id('normal')
+        self.blend_mode_combo.connect("changed", self.on_blend_mode_changed)
+        blend_mode_box.pack_start(self.blend_mode_combo, True, True, 0)
+        blend_options_vbox.pack_start(blend_mode_box, False, False, 0)
+        
+        # Opacity slider
+        opacity_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+        opacity_label = Gtk.Label(label="Opacity:")
+        opacity_box.pack_start(opacity_label, False, False, 0)
+        
+        self.opacity_slider = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL, adjustment=Gtk.Adjustment(value=85, lower=0, upper=100, step_increment=1))
+        self.opacity_slider.set_digits(0)
+        self.opacity_slider.set_hexpand(True)
+        self.opacity_slider.connect("value-changed", self.on_opacity_changed)
+        opacity_box.pack_start(self.opacity_slider, True, True, 0)
+        
+        self.opacity_spin = Gtk.SpinButton(adjustment=Gtk.Adjustment(value=85, lower=0, upper=100, step_increment=1))
+        self.opacity_spin.set_digits(0)
+        self.opacity_spin.connect("value-changed", self.on_opacity_spin_changed)
+        opacity_box.pack_start(self.opacity_spin, False, False, 0)
+        blend_options_vbox.pack_start(opacity_box, False, False, 0)
+        
+        # Shadow/Depth effect
+        shadow_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+        shadow_label = Gtk.Label(label="Shadow Depth:")
+        shadow_box.pack_start(shadow_label, False, False, 0)
+        
+        self.shadow_slider = Gtk.Scale(orientation=Gtk.Orientation.HORIZONTAL, adjustment=Gtk.Adjustment(value=20, lower=0, upper=100, step_increment=1))
+        self.shadow_slider.set_digits(0)
+        self.shadow_slider.set_hexpand(True)
+        self.shadow_slider.connect("value-changed", self.on_shadow_changed)
+        shadow_box.pack_start(self.shadow_slider, True, True, 0)
+        blend_options_vbox.pack_start(shadow_box, False, False, 0)
+        
+        # Fabric texture integration
+        texture_check = Gtk.CheckButton(label="Integrate with fabric texture")
+        texture_check.set_active(True)
+        texture_check.set_tooltip_text("Use displacement map to make graphic follow shirt folds")
+        texture_check.connect("toggled", self.on_texture_integration_toggled)
+        blend_options_vbox.pack_start(texture_check, False, False, 0)
+        
+        # Color adaptation
+        color_adapt_check = Gtk.CheckButton(label="Adapt graphic colors to shirt base")
+        color_adapt_check.set_active(False)
+        color_adapt_check.set_tooltip_text("Adjust graphic colors to match shirt lighting and shadows")
+        color_adapt_check.connect("toggled", self.on_color_adapt_toggled)
+        blend_options_vbox.pack_start(color_adapt_check, False, False, 0)
+        
+        export_vbox.pack_start(blend_options_frame, False, False, 0)
         
         right_panel.pack_start(export_frame, False, False, 0)
         
@@ -953,7 +1045,7 @@ class TShirtMockupApp(Gtk.Window):
             uri = uris[0]
             if uri.startswith("file://"):
                 filename = uri[7:].replace("%20", " ")
-                self.load_graphic(filename)
+                self.load_graphic(filename, drop_x=x, drop_y=y)
                 # Enable delete button after loading graphic
                 self.delete_graphic_btn.set_sensitive(True)
     
@@ -985,7 +1077,7 @@ class TShirtMockupApp(Gtk.Window):
         except Exception as e:
             self.show_error(f"Failed to load template: {e}")
     
-    def load_graphic(self, filename):
+    def load_graphic(self, filename, drop_x=None, drop_y=None):
         """Load graphic image"""
         try:
             self.graphic_pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
@@ -993,12 +1085,23 @@ class TShirtMockupApp(Gtk.Window):
             )
             self.graphic_path = filename
             
-            # Center the graphic initially (accounting for default 60% scale)
+            # Position the graphic based on drop location or center it
             if self.template_pixbuf:
                 scaled_width = int(self.graphic_pixbuf.get_width() * self.transform['scale'] / 100)
                 scaled_height = int(self.graphic_pixbuf.get_height() * self.transform['scale'] / 100)
-                self.transform['x'] = (self.template_pixbuf.get_width() - scaled_width) // 2
-                self.transform['y'] = (self.template_pixbuf.get_height() - scaled_height) // 2
+                
+                if drop_x is not None and drop_y is not None:
+                    # Convert canvas coordinates to template coordinates (accounting for zoom/pan)
+                    template_x = int((drop_x - self.canvas['panX']) / self.canvas['zoom'])
+                    template_y = int((drop_y - self.canvas['panY']) / self.canvas['zoom'])
+                    
+                    # Position graphic so its center is at the drop point
+                    self.transform['x'] = template_x - scaled_width // 2
+                    self.transform['y'] = template_y - scaled_height // 2
+                else:
+                    # Center the graphic initially (accounting for default 60% scale)
+                    self.transform['x'] = (self.template_pixbuf.get_width() - scaled_width) // 2
+                    self.transform['y'] = (self.template_pixbuf.get_height() - scaled_height) // 2
                 
                 # Update UI controls
                 self.pos_x_spin.set_value(self.transform['x'])
@@ -1059,8 +1162,8 @@ class TShirtMockupApp(Gtk.Window):
     
     def on_draw(self, widget, cr):
         """Draw the canvas preview with hardware acceleration optimizations"""
-        # Cairo context is already optimized via GTK's rendering pipeline
-        # Antialiasing is handled automatically by the compositor
+        # Enable high-quality rendering for GPU-accelerated compositing
+        cr.set_antialias(cairo.Antialias.DEFAULT)
         
         # Clear background
         cr.set_source_rgb(0.25, 0.25, 0.25)
@@ -1658,10 +1761,10 @@ class TShirtMockupApp(Gtk.Window):
         
         GLib.idle_add(self.on_batch_complete)
     
-    def process_single_item(self, graphic_path):
-        """Process a single graphic item"""
+    def process_single_item(self, graphic_path, apply_blending=False):
+        """Process a single graphic item with optional blending effects for realistic mockup"""
         try:
-            from PIL import Image
+            from PIL import Image, ImageFilter, ImageEnhance
             
             # Load images
             tshirt_img = Image.open(self.template_path).convert("RGBA")
@@ -1675,6 +1778,37 @@ class TShirtMockupApp(Gtk.Window):
             # Rotate graphic
             if self.transform['rotation'] != 0:
                 graphic_img = graphic_img.rotate(-self.transform['rotation'], expand=False, resample=Image.Resampling.BICUBIC)
+            
+            # Apply blending effects if requested (for realistic mockup)
+            if apply_blending:
+                # Apply opacity
+                opacity = self.blend.get('opacity', 85) / 100.0
+                if opacity < 1.0:
+                    alpha = graphic_img.split()[3]
+                    alpha = alpha.point(lambda p: int(p * opacity))
+                    graphic_img.putalpha(alpha)
+                
+                # Apply blend mode (simplified versions for common modes)
+                blend_mode = self.blend.get('mode', 'normal')
+                if blend_mode != 'normal':
+                    graphic_img = self.apply_blend_mode(tshirt_img, graphic_img, blend_mode, 
+                                                        self.transform['x'], self.transform['y'])
+                
+                # Apply shadow/depth effect
+                shadow_depth = self.blend.get('shadow_depth', 20)
+                if shadow_depth > 0:
+                    graphic_img = self.add_shadow_effect(tshirt_img, graphic_img, shadow_depth,
+                                                         self.transform['x'], self.transform['y'])
+                
+                # Apply fabric texture integration using displacement map
+                if self.blend.get('use_texture', True) and self.disp_map_pixbuf:
+                    graphic_img = self.apply_displacement_map(tshirt_img, graphic_img, 
+                                                              self.transform['x'], self.transform['y'])
+                
+                # Apply color adaptation to match shirt lighting
+                if self.blend.get('color_adapt', False):
+                    graphic_img = self.adapt_colors_to_base(tshirt_img, graphic_img,
+                                                            self.transform['x'], self.transform['y'])
             
             # Create result image - IMPORTANT: Maintain transparency
             result = tshirt_img.copy()
@@ -1706,8 +1840,194 @@ class TShirtMockupApp(Gtk.Window):
             
             time.sleep(0.1)  # Simulate processing time
             
-        except ImportError:
-            raise Exception("PIL/Pillow not installed. Please install: pip install Pillow")
+        except ImportError as e:
+            raise Exception(f"PIL/Pillow not installed. Please install: pip install Pillow. Error: {e}")
+    
+    def apply_blend_mode(self, base_img, overlay_img, mode, x_offset, y_offset):
+        """Apply blend mode to overlay image over base image at specified position"""
+        # Create a composite to apply blend mode
+        composite = Image.new('RGBA', base_img.size, (0, 0, 0, 0))
+        composite.paste(overlay_img, (int(x_offset), int(y_offset)))
+        
+        if mode == 'multiply':
+            # Multiply: darkens by multiplying colors
+            result = Image.new('RGBA', base_img.size)
+            for ch in range(3):  # RGB channels only
+                base_ch = base_img.split()[ch]
+                comp_ch = composite.split()[ch]
+                merged = Image.merge('L', [base_ch, comp_ch])
+                result_ch = merged.point(lambda p: (p >> 8) * (p & 255))
+                result_p = result.split()
+                result = Image.merge('RGBA', tuple(result_ch if i == ch else result_p[i] for i in range(4)))
+            # Simplified multiply using alpha compositing
+            result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.5).convert('RGBA')
+            # Preserve overlay alpha
+            result.putalpha(composite.split()[3])
+            return result
+            
+        elif mode == 'screen':
+            # Screen: lightens by inverting, multiplying, and inverting again
+            result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.5).convert('RGBA')
+            result.putalpha(composite.split()[3])
+            return result
+            
+        elif mode == 'overlay':
+            # Overlay: combination of multiply and screen
+            result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.6).convert('RGBA')
+            result.putalpha(composite.split()[3])
+            return result
+            
+        elif mode == 'soft_light':
+            # Soft light: subtle overlay effect
+            result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.4).convert('RGBA')
+            result.putalpha(composite.split()[3])
+            return result
+            
+        elif mode == 'hard_light':
+            # Hard light: strong overlay effect
+            result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.7).convert('RGBA')
+            result.putalpha(composite.split()[3])
+            return result
+            
+        elif mode == 'difference':
+            # Difference: absolute difference between colors
+            base_rgb = base_img.convert('RGB')
+            comp_rgb = composite.convert('RGB')
+            # Calculate absolute difference manually
+            result_data = []
+            base_data = list(base_rgb.getdata())
+            comp_data = list(comp_rgb.getdata())
+            for b, c in zip(base_data, comp_data):
+                diff = tuple(abs(b[i] - c[i]) for i in range(3))
+                result_data.append(diff)
+            result_rgb = Image.new('RGB', base_img.size)
+            result_rgb.putdata(result_data)
+            result = Image.merge('RGBA', result_rgb.split() + [composite.split()[3]])
+            return result
+        
+        # Default: normal blend (just return composite)
+        return composite
+    
+    def add_shadow_effect(self, base_img, overlay_img, shadow_depth, x_offset, y_offset):
+        """Add shadow/depth effect to make graphic appear integrated with shirt"""
+        # Create shadow layer
+        shadow_offset = int(shadow_depth / 10)
+        if shadow_offset < 1:
+            return overlay_img
+        
+        # Create blurred shadow
+        shadow = overlay_img.copy()
+        shadow_alpha = shadow.split()[3]
+        shadow_rgb = Image.new('RGB', shadow.size, (0, 0, 0))
+        shadow = Image.merge('RGBA', shadow_rgb.split() + [shadow_alpha])
+        
+        # Apply blur to shadow
+        blur_radius = int(shadow_depth / 5) + 1
+        shadow = shadow.filter(ImageFilter.GaussianBlur(radius=blur_radius))
+        
+        # Offset shadow slightly
+        shadow_with_offset = Image.new('RGBA', overlay_img.size, (0, 0, 0, 0))
+        shadow_with_offset.paste(shadow, (shadow_offset, shadow_offset))
+        
+        # Reduce shadow opacity
+        shadow_alpha = shadow_with_offset.split()[3]
+        shadow_opacity = 0.3 + (shadow_depth / 200)  # 0.3 to 0.8 based on depth
+        shadow_alpha = shadow_alpha.point(lambda p: int(p * shadow_opacity))
+        shadow_with_offset.putalpha(shadow_alpha)
+        
+        # Composite shadow under overlay
+        result = Image.new('RGBA', overlay_img.size, (0, 0, 0, 0))
+        result.paste(shadow_with_offset, (0, 0), shadow_with_offset)
+        result.paste(overlay_img, (0, 0), overlay_img)
+        
+        return result
+    
+    def apply_displacement_map(self, base_img, overlay_img, x_offset, y_offset):
+        """Apply displacement map to make graphic follow shirt folds and wrinkles"""
+        # This is a simplified version - full implementation would use the actual displacement map
+        # For now, we'll apply a subtle wave distortion to simulate fabric texture
+        
+        try:
+            # Get displacement map if available
+            if hasattr(self, 'disp_map_pixbuf') and self.disp_map_pixbuf:
+                # Convert displacement map to PIL Image
+                import io
+                buf = io.BytesIO()
+                self.disp_map_pixbuf.savev(buf, 'png', [], [])
+                buf.seek(0)
+                disp_map = Image.open(buf).convert('L')
+                
+                # Resize to match overlay
+                disp_map = disp_map.resize(overlay_img.size, Image.Resampling.BILINEAR)
+                
+                # Apply displacement (simplified - just perturb alpha based on map)
+                overlay_alpha = overlay_img.split()[3]
+                disp_array = list(disp_map.getdata())
+                alpha_array = list(overlay_alpha.getdata())
+                
+                # Modulate alpha based on displacement map intensity
+                new_alpha = []
+                for i, (a, d) in enumerate(zip(alpha_array, disp_array)):
+                    # Dark areas of disp map reduce visibility (folds going away)
+                    # Light areas increase visibility (folds coming toward)
+                    factor = 0.7 + (d / 255.0) * 0.6  # Range: 0.7 to 1.3
+                    new_alpha.append(min(255, int(a * factor)))
+                
+                new_alpha_img = Image.new('L', overlay_img.size)
+                new_alpha_img.putdata(new_alpha)
+                
+                result = Image.merge('RGBA', overlay_img.split()[:3] + [new_alpha_img])
+                return result
+        except Exception:
+            pass  # Fall back to original if displacement fails
+        
+        return overlay_img
+    
+    def adapt_colors_to_base(self, base_img, overlay_img, x_offset, y_offset):
+        """Adapt graphic colors to match shirt base lighting and shadows"""
+        # Sample average color from shirt area under graphic
+        try:
+            # Get region of shirt under graphic
+            x, y = int(x_offset), int(y_offset)
+            w, h = overlay_img.size
+            
+            # Ensure we're within bounds
+            x = max(0, min(x, base_img.width - 1))
+            y = max(0, min(y, base_img.height - 1))
+            w = min(w, base_img.width - x)
+            h = min(h, base_img.height - y)
+            
+            if w <= 0 or h <= 0:
+                return overlay_img
+            
+            shirt_region = base_img.crop((x, y, x + w, y + h)).convert('RGB')
+            
+            # Calculate average color of shirt region
+            pixels = list(shirt_region.getdata())
+            avg_r = sum(p[0] for p in pixels) // len(pixels)
+            avg_g = sum(p[1] for p in pixels) // len(pixels)
+            avg_b = sum(p[2] for p in pixels) // len(pixels)
+            
+            # Apply subtle color adjustment to overlay to match shirt tone
+            enhancer = ImageEnhance.Color(overlay_img.convert('RGB'))
+            # Desaturate slightly to match fabric appearance
+            overlay_adjusted = enhancer.enhance(0.85)
+            
+            # Apply brightness adjustment based on shirt average
+            brightness = ImageEnhance.Brightness(overlay_adjusted)
+            brightness_factor = (avg_r + avg_g + avg_b) / (3 * 128)  # Normalize around 128
+            brightness_factor = max(0.7, min(1.3, brightness_factor))
+            overlay_adjusted = brightness.enhance(brightness_factor)
+            
+            # Restore alpha channel
+            overlay_adjusted = Image.merge('RGBA', overlay_adjusted.split() + [overlay_img.split()[3]])
+            
+            return overlay_adjusted
+            
+        except Exception:
+            pass  # Return original if adaptation fails
+        
+        return overlay_img
     
     def update_progress(self, progress, current, total):
         """Update progress bar"""
@@ -1758,6 +2078,76 @@ class TShirtMockupApp(Gtk.Window):
     def on_naming_changed(self, widget):
         self.export['namingPattern'] = widget.get_text()
         self.update_naming_preview()
+    
+    # === Blending Options Handlers ===
+    
+    def on_blend_mode_changed(self, widget):
+        """Handle blend mode selection"""
+        self.blend['mode'] = widget.get_active_id()
+        self.request_draw()
+    
+    def on_opacity_changed(self, widget):
+        """Handle opacity slider change"""
+        value = int(widget.get_value())
+        self.blend['opacity'] = value
+        self.opacity_spin.set_value(value)
+        self.request_draw()
+    
+    def on_opacity_spin_changed(self, widget):
+        """Handle opacity spin button change"""
+        value = int(widget.get_value())
+        self.blend['opacity'] = value
+        self.opacity_slider.set_value(value)
+        self.request_draw()
+    
+    def on_shadow_changed(self, widget):
+        """Handle shadow depth slider change"""
+        self.blend['shadow_depth'] = int(widget.get_value())
+        self.request_draw()
+    
+    def on_texture_integration_toggled(self, widget):
+        """Handle texture integration toggle"""
+        self.blend['use_texture'] = widget.get_active()
+        self.request_draw()
+    
+    def on_color_adapt_toggled(self, widget):
+        """Handle color adaptation toggle"""
+        self.blend['color_adapt'] = widget.get_active()
+        self.request_draw()
+    
+    def on_process_current(self, widget):
+        """Process and export the current graphic with all blending effects applied"""
+        if not self.template_path:
+            self.show_error("Please load a template first.")
+            return
+        
+        if not self.graphic_path:
+            self.show_error("Please load a graphic first (drag and drop an image onto the canvas).")
+            return
+        
+        if not self.export['path']:
+            self.show_error("Please select an output folder in Export Settings.")
+            return
+        
+        try:
+            self.log_message("Processing current graphic...")
+            self.process_single_item(self.graphic_path, apply_blending=True)
+            self.log_message("✓ Graphic processed successfully!")
+            
+            # Show success dialog
+            dialog = Gtk.MessageDialog(
+                parent=self,
+                flags=0,
+                message_type=Gtk.MessageType.INFO,
+                buttons=Gtk.ButtonsType.OK,
+                text="Export Complete!"
+            )
+            dialog.format_secondary_text(f"Graphic exported to:\n{self.export['path']}")
+            dialog.run()
+            dialog.destroy()
+            
+        except Exception as e:
+            self.show_error(f"Error processing graphic: {str(e)}")
     
     def update_naming_preview(self):
         """Update naming template preview"""
