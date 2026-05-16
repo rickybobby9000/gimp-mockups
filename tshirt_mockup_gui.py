@@ -1064,8 +1064,8 @@ class TShirtMockupApp(Gtk.Window):
     
     def on_draw(self, widget, cr):
         """Draw the canvas preview with hardware acceleration optimizations"""
-        # Use antialiasing for smoother rendering
-        cr.set_antialias(cairo.ANTIALIAS_FAST)
+        # Cairo context is already optimized via GTK's rendering pipeline
+        # Antialiasing is handled automatically by the compositor
         
         # Clear background
         cr.set_source_rgb(0.25, 0.25, 0.25)
