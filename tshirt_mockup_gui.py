@@ -1845,102 +1845,114 @@ class TShirtMockupApp(Gtk.Window):
     
     def apply_blend_mode(self, base_img, overlay_img, mode, x_offset, y_offset):
         """Apply blend mode to overlay image over base image at specified position"""
-        # Create a composite to apply blend mode
-        composite = Image.new('RGBA', base_img.size, (0, 0, 0, 0))
-        composite.paste(overlay_img, (int(x_offset), int(y_offset)))
-        
-        if mode == 'multiply':
-            # Multiply: darkens by multiplying colors
-            result = Image.new('RGBA', base_img.size)
-            for ch in range(3):  # RGB channels only
-                base_ch = base_img.split()[ch]
-                comp_ch = composite.split()[ch]
-                merged = Image.merge('L', [base_ch, comp_ch])
-                result_ch = merged.point(lambda p: (p >> 8) * (p & 255))
-                result_p = result.split()
-                result = Image.merge('RGBA', tuple(result_ch if i == ch else result_p[i] for i in range(4)))
-            # Simplified multiply using alpha compositing
-            result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.5).convert('RGBA')
-            # Preserve overlay alpha
-            result.putalpha(composite.split()[3])
-            return result
+        try:
+            from PIL import Image
             
-        elif mode == 'screen':
-            # Screen: lightens by inverting, multiplying, and inverting again
-            result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.5).convert('RGBA')
-            result.putalpha(composite.split()[3])
-            return result
+            # Create a composite to apply blend mode
+            composite = Image.new('RGBA', base_img.size, (0, 0, 0, 0))
+            composite.paste(overlay_img, (int(x_offset), int(y_offset)))
             
-        elif mode == 'overlay':
-            # Overlay: combination of multiply and screen
-            result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.6).convert('RGBA')
-            result.putalpha(composite.split()[3])
-            return result
+            if mode == 'multiply':
+                # Multiply: darkens by multiplying colors
+                result = Image.new('RGBA', base_img.size)
+                for ch in range(3):  # RGB channels only
+                    base_ch = base_img.split()[ch]
+                    comp_ch = composite.split()[ch]
+                    merged = Image.merge('L', [base_ch, comp_ch])
+                    result_ch = merged.point(lambda p: (p >> 8) * (p & 255))
+                    result_p = result.split()
+                    result = Image.merge('RGBA', tuple(result_ch if i == ch else result_p[i] for i in range(4)))
+                # Simplified multiply using alpha compositing
+                result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.5).convert('RGBA')
+                # Preserve overlay alpha
+                result.putalpha(composite.split()[3])
+                return result
+                
+            elif mode == 'screen':
+                # Screen: lightens by inverting, multiplying, and inverting again
+                result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.5).convert('RGBA')
+                result.putalpha(composite.split()[3])
+                return result
+                
+            elif mode == 'overlay':
+                # Overlay: combination of multiply and screen
+                result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.6).convert('RGBA')
+                result.putalpha(composite.split()[3])
+                return result
+                
+            elif mode == 'soft_light':
+                # Soft light: subtle overlay effect
+                result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.4).convert('RGBA')
+                result.putalpha(composite.split()[3])
+                return result
+                
+            elif mode == 'hard_light':
+                # Hard light: strong overlay effect
+                result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.7).convert('RGBA')
+                result.putalpha(composite.split()[3])
+                return result
+                
+            elif mode == 'difference':
+                # Difference: absolute difference between colors
+                base_rgb = base_img.convert('RGB')
+                comp_rgb = composite.convert('RGB')
+                # Calculate absolute difference manually
+                result_data = []
+                base_data = list(base_rgb.getdata())
+                comp_data = list(comp_rgb.getdata())
+                for b, c in zip(base_data, comp_data):
+                    diff = tuple(abs(b[i] - c[i]) for i in range(3))
+                    result_data.append(diff)
+                result_rgb = Image.new('RGB', base_img.size)
+                result_rgb.putdata(result_data)
+                result = Image.merge('RGBA', result_rgb.split() + [composite.split()[3]])
+                return result
             
-        elif mode == 'soft_light':
-            # Soft light: subtle overlay effect
-            result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.4).convert('RGBA')
-            result.putalpha(composite.split()[3])
-            return result
-            
-        elif mode == 'hard_light':
-            # Hard light: strong overlay effect
-            result = Image.blend(base_img.convert('RGB'), composite.convert('RGB'), 0.7).convert('RGBA')
-            result.putalpha(composite.split()[3])
-            return result
-            
-        elif mode == 'difference':
-            # Difference: absolute difference between colors
-            base_rgb = base_img.convert('RGB')
-            comp_rgb = composite.convert('RGB')
-            # Calculate absolute difference manually
-            result_data = []
-            base_data = list(base_rgb.getdata())
-            comp_data = list(comp_rgb.getdata())
-            for b, c in zip(base_data, comp_data):
-                diff = tuple(abs(b[i] - c[i]) for i in range(3))
-                result_data.append(diff)
-            result_rgb = Image.new('RGB', base_img.size)
-            result_rgb.putdata(result_data)
-            result = Image.merge('RGBA', result_rgb.split() + [composite.split()[3]])
-            return result
-        
-        # Default: normal blend (just return composite)
-        return composite
+            # Default: normal blend (just return composite)
+            return composite
+        except Exception as e:
+            print(f"Blend mode error: {e}")
+            return overlay_img
     
     def add_shadow_effect(self, base_img, overlay_img, shadow_depth, x_offset, y_offset):
         """Add shadow/depth effect to make graphic appear integrated with shirt"""
-        # Create shadow layer
-        shadow_offset = int(shadow_depth / 10)
-        if shadow_offset < 1:
+        try:
+            from PIL import Image, ImageFilter
+            
+            # Create shadow layer
+            shadow_offset = int(shadow_depth / 10)
+            if shadow_offset < 1:
+                return overlay_img
+            
+            # Create blurred shadow
+            shadow = overlay_img.copy()
+            shadow_alpha = shadow.split()[3]
+            shadow_rgb = Image.new('RGB', shadow.size, (0, 0, 0))
+            shadow = Image.merge('RGBA', shadow_rgb.split() + [shadow_alpha])
+            
+            # Apply blur to shadow
+            blur_radius = int(shadow_depth / 5) + 1
+            shadow = shadow.filter(ImageFilter.GaussianBlur(radius=blur_radius))
+            
+            # Offset shadow slightly
+            shadow_with_offset = Image.new('RGBA', overlay_img.size, (0, 0, 0, 0))
+            shadow_with_offset.paste(shadow, (shadow_offset, shadow_offset))
+            
+            # Reduce shadow opacity
+            shadow_alpha = shadow_with_offset.split()[3]
+            shadow_opacity = 0.3 + (shadow_depth / 200)  # 0.3 to 0.8 based on depth
+            shadow_alpha = shadow_alpha.point(lambda p: int(p * shadow_opacity))
+            shadow_with_offset.putalpha(shadow_alpha)
+            
+            # Composite shadow under overlay
+            result = Image.new('RGBA', overlay_img.size, (0, 0, 0, 0))
+            result.paste(shadow_with_offset, (0, 0), shadow_with_offset)
+            result.paste(overlay_img, (0, 0), overlay_img)
+            
+            return result
+        except Exception as e:
+            print(f"Shadow effect error: {e}")
             return overlay_img
-        
-        # Create blurred shadow
-        shadow = overlay_img.copy()
-        shadow_alpha = shadow.split()[3]
-        shadow_rgb = Image.new('RGB', shadow.size, (0, 0, 0))
-        shadow = Image.merge('RGBA', shadow_rgb.split() + [shadow_alpha])
-        
-        # Apply blur to shadow
-        blur_radius = int(shadow_depth / 5) + 1
-        shadow = shadow.filter(ImageFilter.GaussianBlur(radius=blur_radius))
-        
-        # Offset shadow slightly
-        shadow_with_offset = Image.new('RGBA', overlay_img.size, (0, 0, 0, 0))
-        shadow_with_offset.paste(shadow, (shadow_offset, shadow_offset))
-        
-        # Reduce shadow opacity
-        shadow_alpha = shadow_with_offset.split()[3]
-        shadow_opacity = 0.3 + (shadow_depth / 200)  # 0.3 to 0.8 based on depth
-        shadow_alpha = shadow_alpha.point(lambda p: int(p * shadow_opacity))
-        shadow_with_offset.putalpha(shadow_alpha)
-        
-        # Composite shadow under overlay
-        result = Image.new('RGBA', overlay_img.size, (0, 0, 0, 0))
-        result.paste(shadow_with_offset, (0, 0), shadow_with_offset)
-        result.paste(overlay_img, (0, 0), overlay_img)
-        
-        return result
     
     def apply_displacement_map(self, base_img, overlay_img, x_offset, y_offset):
         """Apply displacement map to make graphic follow shirt folds and wrinkles"""
@@ -1948,6 +1960,8 @@ class TShirtMockupApp(Gtk.Window):
         # For now, we'll apply a subtle wave distortion to simulate fabric texture
         
         try:
+            from PIL import Image
+            
             # Get displacement map if available
             if hasattr(self, 'disp_map_pixbuf') and self.disp_map_pixbuf:
                 # Convert displacement map to PIL Image
@@ -1987,6 +2001,8 @@ class TShirtMockupApp(Gtk.Window):
         """Adapt graphic colors to match shirt base lighting and shadows"""
         # Sample average color from shirt area under graphic
         try:
+            from PIL import ImageEnhance
+            
             # Get region of shirt under graphic
             x, y = int(x_offset), int(y_offset)
             w, h = overlay_img.size
@@ -2024,7 +2040,8 @@ class TShirtMockupApp(Gtk.Window):
             
             return overlay_adjusted
             
-        except Exception:
+        except Exception as e:
+            print(f"Color adaptation error: {e}")
             pass  # Return original if adaptation fails
         
         return overlay_img
