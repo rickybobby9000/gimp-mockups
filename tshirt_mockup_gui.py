@@ -6,6 +6,11 @@ Implements full UI specification with displacement mapping, batch processing, an
 Ensures top graphic layer maintains transparency in exports.
 """
 
+import sys
+# Use system Python's gi module (required for GTK3)
+if '/usr/lib/python3/dist-packages' not in sys.path:
+    sys.path.insert(0, '/usr/lib/python3/dist-packages')
+
 import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('GdkPixbuf', '2.0')
