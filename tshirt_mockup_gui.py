@@ -541,6 +541,12 @@ class TShirtMockupApp(Gtk.Window):
         self.quality_combo.connect("changed", self.on_quality_changed)
         view_toolbar.pack_start(self.quality_combo, False, False, 0)
         
+        # Delete Graphic Button
+        self.delete_graphic_btn = Gtk.Button(label="🗑️ Delete Graphic")
+        self.delete_graphic_btn.connect("clicked", self.on_delete_graphic)
+        self.delete_graphic_btn.set_sensitive(False)
+        view_toolbar.pack_end(self.delete_graphic_btn, False, False, 10)
+        
         # Drawing area for canvas
         self.drawing_area = Gtk.DrawingArea()
         self.drawing_area.set_size_request(700, 600)
@@ -932,6 +938,8 @@ class TShirtMockupApp(Gtk.Window):
             if uri.startswith("file://"):
                 filename = uri[7:].replace("%20", " ")
                 self.load_graphic(filename)
+                # Enable delete button after loading graphic
+                self.delete_graphic_btn.set_sensitive(True)
     
     def load_template(self, filename):
         """Load template image"""
@@ -969,10 +977,12 @@ class TShirtMockupApp(Gtk.Window):
             )
             self.graphic_path = filename
             
-            # Center the graphic initially
+            # Center the graphic initially (accounting for default 60% scale)
             if self.template_pixbuf:
-                self.transform['x'] = (self.template_pixbuf.get_width() - self.graphic_pixbuf.get_width()) // 2
-                self.transform['y'] = (self.template_pixbuf.get_height() - self.graphic_pixbuf.get_height()) // 2
+                scaled_width = int(self.graphic_pixbuf.get_width() * self.transform['scale'] / 100)
+                scaled_height = int(self.graphic_pixbuf.get_height() * self.transform['scale'] / 100)
+                self.transform['x'] = (self.template_pixbuf.get_width() - scaled_width) // 2
+                self.transform['y'] = (self.template_pixbuf.get_height() - scaled_height) // 2
                 
                 # Update UI controls
                 self.pos_x_spin.set_value(self.transform['x'])
@@ -1489,6 +1499,14 @@ class TShirtMockupApp(Gtk.Window):
     def on_quality_changed(self, widget):
         self.canvas['viewMode'] = 'draft' if widget.get_active_id() == 'draft' else 'full'
         self.queue_preview_update()
+    
+    def on_delete_graphic(self, widget):
+        """Delete the graphic layer"""
+        self.graphic_pixbuf = None
+        self.graphic_path = None
+        self.delete_graphic_btn.set_sensitive(False)
+        self.queue_preview_update()
+        self.log_message("Deleted graphic layer")
     
     def on_auto_mask_toggled(self, widget):
         pass  # Implement auto-masking logic
