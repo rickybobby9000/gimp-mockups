@@ -1038,16 +1038,11 @@ class TShirtMockupApp(Gtk.Window):
         self.preview_debounce_timer = GLib.timeout_add(150, self.update_preview)
     
     def request_draw(self):
-        """Request a draw frame using GTK's frame clock for smooth animation"""
+        """Request a draw for smooth animation using GTK3-compatible method"""
         if not self.pending_draw and self.drawing_area:
             self.pending_draw = True
-            frame_clock = self.drawing_area.get_frame_clock()
-            if frame_clock:
-                frame_clock.request_phase(Gtk.Phase.UPDATE)
-                GLib.idle_add(self.perform_draw)
-            else:
-                self.drawing_area.queue_draw()
-                self.pending_draw = False
+            # Use GLib.idle_add for smooth, efficient redraws in GTK3
+            GLib.idle_add(self.perform_draw)
     
     def perform_draw(self):
         """Perform the actual draw operation"""
