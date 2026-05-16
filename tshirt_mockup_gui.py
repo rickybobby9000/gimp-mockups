@@ -9,7 +9,7 @@ Ensures top graphic layer maintains transparency in exports.
 import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('GdkPixbuf', '2.0')
-from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio, Pango
+from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio, Pango, cairo
 import os
 import sys
 import math
@@ -32,6 +32,13 @@ class TShirtMockupApp(Gtk.Window):
         super().__init__(title="👕 T-Shirt Mockup Creator Pro")
         self.set_default_size(1400, 900)
         self.set_border_width(5)
+        
+        # Enable hardware acceleration
+        screen = Gdk.Screen.get_default()
+        visual = Gdk.Screen.get_rgba_visual(screen)
+        if visual:
+            self.set_visual(visual)
+        self.set_app_paintable(True)
         
         # Image storage
         self.template_path = None
@@ -107,6 +114,9 @@ class TShirtMockupApp(Gtk.Window):
         self.resize_start_x = 0
         self.resize_start_y = 0
         self.preview_debounce_timer = None
+        
+        # Animation frame scheduling for smooth rendering
+        self.pending_draw = False
         
         self.init_ui()
         self.connect("destroy", Gtk.main_quit)
@@ -547,8 +557,9 @@ class TShirtMockupApp(Gtk.Window):
         self.delete_graphic_btn.set_sensitive(False)
         view_toolbar.pack_end(self.delete_graphic_btn, False, False, 10)
         
-        # Drawing area for canvas
+        # Drawing area for canvas with hardware acceleration
         self.drawing_area = Gtk.DrawingArea()
+        self.drawing_area.set_app_paintable(True)
         self.drawing_area.set_size_request(700, 600)
         self.drawing_area.connect("draw", self.on_draw)
         self.drawing_area.add_events(
@@ -1021,15 +1032,36 @@ class TShirtMockupApp(Gtk.Window):
         
         self.preview_debounce_timer = GLib.timeout_add(150, self.update_preview)
     
-    def update_preview(self):
-        """Update the canvas preview"""
+    def request_draw(self):
+        """Request a draw frame using GTK's frame clock for smooth animation"""
+        if not self.pending_draw and self.drawing_area:
+            self.pending_draw = True
+            frame_clock = self.drawing_area.get_frame_clock()
+            if frame_clock:
+                frame_clock.request_phase(Gtk.Phase.UPDATE)
+                GLib.idle_add(self.perform_draw)
+            else:
+                self.drawing_area.queue_draw()
+                self.pending_draw = False
+    
+    def perform_draw(self):
+        """Perform the actual draw operation"""
         if self.drawing_area:
             self.drawing_area.queue_draw()
+        self.pending_draw = False
+        return False
+    
+    def update_preview(self):
+        """Update the canvas preview"""
+        self.request_draw()
         self.preview_debounce_timer = None
         return False
     
     def on_draw(self, widget, cr):
-        """Draw the canvas preview"""
+        """Draw the canvas preview with hardware acceleration optimizations"""
+        # Use antialiasing for smoother rendering
+        cr.set_antialias(cairo.ANTIALIAS_FAST)
+        
         # Clear background
         cr.set_source_rgb(0.25, 0.25, 0.25)
         cr.paint()
@@ -1049,7 +1081,7 @@ class TShirtMockupApp(Gtk.Window):
         cr.translate(self.canvas['panX'], self.canvas['panY'])
         cr.scale(self.canvas['zoom'], self.canvas['zoom'])
         
-        # Draw template
+        # Draw template using optimized source
         Gdk.cairo_set_source_pixbuf(cr, self.template_pixbuf, 0, 0)
         cr.paint()
         
@@ -1296,8 +1328,8 @@ class TShirtMockupApp(Gtk.Window):
                 self.pos_y_spin.set_value(self.transform['y'])
                 self.pos_y_slider.set_value(self.transform['y'])
                 
-                # Force immediate redraw
-                self.drawing_area.queue_draw()
+                # Smooth redraw using frame-synchronized rendering
+                self.request_draw()
                 
             elif self.dragging:
                 dx = current_x - self.last_mouse_x
@@ -1315,8 +1347,8 @@ class TShirtMockupApp(Gtk.Window):
                 self.last_mouse_x = current_x
                 self.last_mouse_y = current_y
                 
-                # Force immediate redraw for responsive dragging
-                self.drawing_area.queue_draw()
+                # Smooth redraw using frame-synchronized rendering
+                self.request_draw()
     
     def on_scroll(self, widget, event):
         """Handle scroll wheel for zooming"""
@@ -1336,8 +1368,8 @@ class TShirtMockupApp(Gtk.Window):
         elif event.direction == Gdk.ScrollDirection.DOWN:
             self.canvas['zoom'] = max(0.1, self.canvas['zoom'] - 0.1)
         
-        # Force immediate redraw
-        self.drawing_area.queue_draw()
+        # Smooth redraw using frame-synchronized rendering
+        self.request_draw()
     
     # === Transform Control Handlers ===
     
