@@ -1111,19 +1111,16 @@ class TShirtMockupApp(Gtk.Window):
         # Set opacity
         cr.set_source_rgba(1, 1, 1, self.blend['opacity'] / 100.0)
         
-        # Scale and draw graphic
-        Gdk.cairo_set_source_pixbuf(cr, self.graphic_pixbuf, 
-                                   self.transform['x'], 
-                                   self.transform['y'])
+        # Scale the pixbuf directly and draw it
+        scaled_pixbuf = self.graphic_pixbuf.scale_simple(
+            scaled_width, scaled_height, GdkPixbuf.InterpType.BILINEAR
+        )
         
-        pattern = cr.get_source()
-        matrix = pattern.get_matrix()
-        matrix.scale(100.0 / self.transform['scale'], 100.0 / self.transform['scale'])
-        pattern.set_matrix(matrix)
-        
-        cr.rectangle(self.transform['x'], self.transform['y'], 
-                    scaled_width, scaled_height)
-        cr.fill()
+        if scaled_pixbuf:
+            Gdk.cairo_set_source_pixbuf(cr, scaled_pixbuf, 
+                                       self.transform['x'], 
+                                       self.transform['y'])
+            cr.paint()
         
         cr.restore()
     
